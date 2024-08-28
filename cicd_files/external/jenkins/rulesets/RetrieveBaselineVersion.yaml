@@ -1,0 +1,33 @@
+modelVersion: 2.0
+
+description: "Baseline Versions: Retrieve Specified Baseline Version"
+
+docker-images:
+  - python: armdocker.rnd.ericsson.se/dockerhub-ericsson-remote/python:3.9.4-slim-buster
+
+properties:
+  - path-to-retrieve-baseline-versions-python-script: cicd_files/external/jenkins/scripts/retrieve_specified_baseline_version.py
+  - container-path-to-retrieve-baseline-versions-python-script: /usr/src/app/out/${path-to-retrieve-baseline-versions-python-script}
+
+env:
+  - PWD
+  - VERSIONS_FILENAME
+  - KEY_TO_RETRIEVE_BASELINE_VERSION_OF
+  - SPECIFIED_VERSION_FOR_PIPELINE
+
+rules:
+  retrieve-required-baseline-version:
+    - task: run-retrieve-baseline-versions-python-script
+      docker-image: python
+      docker-mounts:
+        - "${env.PWD}:/usr/src/app/out"
+      cmd: python "${container-path-to-retrieve-baseline-versions-python-script}" -p "/usr/src/app/out/${env.VERSIONS_FILENAME}.json" -k "${env.KEY_TO_RETRIEVE_BASELINE_VERSION_OF}"
+
+  write-version-to-artifact-properties:
+    - task: write-version-file-to-artifact-properties
+      cmd: bash -c '
+        if [[ "${env.SPECIFIED_VERSION_FOR_PIPELINE}" == "0.0.0" ]]; then
+           echo "${env.KEY_TO_RETRIEVE_BASELINE_VERSION_OF}=$(sed s/\"//g retrieved_version.txt)" > "artifact.properties";
+        else
+           echo "${env.KEY_TO_RETRIEVE_BASELINE_VERSION_OF}=${env.SPECIFIED_VERSION_FOR_PIPELINE}" > "artifact.properties";
+        fi'

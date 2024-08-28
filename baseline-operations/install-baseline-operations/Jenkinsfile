@@ -1,0 +1,31 @@
+#!/usr/bin/env groovy
+
+def bob = "bob/bob -r \${WORKSPACE}/baseline-operations/install-baseline-operations/ruleset2.0.yaml"
+
+pipeline {
+    agent {
+        node {
+            label SLAVE
+        }
+    }
+
+    stages {
+        stage('Cleaning Git Repo') {
+            steps {
+                sh 'git clean -xdff'
+                sh 'git submodule sync'
+                sh 'git submodule update --init --recursive'
+            }
+        }
+        stage('Make Changes To Version File') {
+            steps {
+                sh "${bob} update-versions-file-with-new-install-baseline"
+            }
+        }
+        stage('Push Changes To Gerrit If Required') {
+            steps {
+                sh "${bob} push-changes-to-version-file-if-required"
+            }
+        }
+    }
+}

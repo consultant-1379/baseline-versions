@@ -1,0 +1,38 @@
+modelVersion: 2.0
+
+description: "Baseline Versions: Update Initial Install Baseline"
+
+docker-images:
+  - python: armdocker.rnd.ericsson.se/dockerhub-ericsson-remote/python:3.9.4-slim-buster
+
+properties:
+  - install-baseline-version-key: II_BASELINE_INT_CHART_VERSION
+  - path-to-version-file: versions.json
+  - container-path-to-version-file: /usr/src/app/out/${path-to-version-file}
+  - path-to-update-baseline-versions-python-script: baseline-operations/update_baseline_versions_file.py
+  - container-path-to-update-baseline-versions-python-script: /usr/src/app/out/${path-to-update-baseline-versions-python-script}
+  - gerrit-url-of-baseline-repo: ssh://gerrit-gamma.gic.ericsson.se:29418/OSS/com.ericsson.oss.cicd/baseline-versions
+
+env:
+  - PWD
+  - NEW_INITIAL_INSTALL_BASELINE_VERSION
+
+rules:
+  update-versions-file-with-new-install-baseline:
+    - task: run-update-baseline-versions-python-script
+      docker-image: python
+      docker-mounts:
+        - "${env.PWD}:/usr/src/app/out"
+      cmd: python "${container-path-to-update-baseline-versions-python-script}" -p "${container-path-to-version-file}" -k "${install-baseline-version-key}" -v "${env.NEW_INITIAL_INSTALL_BASELINE_VERSION}"
+
+  push-changes-to-version-file-if-required:
+    - task: push-changes-from-version-file-to-gerrit-if-required
+      cmd: bash -c '
+        if git status --porcelain | grep .; then
+           git add ${path-to-version-file};
+           git commit -m "New initial install baseline version ${env.NEW_INITIAL_INSTALL_BASELINE_VERSION}";
+           git rebase HEAD gcn/master;
+           git push ${gerrit-url-of-baseline-repo} HEAD:master;
+        else
+           echo "Initial Install baseline version in repo has not changed so not updating version file in gerrit";
+        fi'

@@ -1,0 +1,41 @@
+modelVersion: 2.0
+
+description: "Baseline Versions: Compare Versions"
+
+properties:
+  - path-to-compare-versions-python-script: cicd_files/external/jenkins/scripts/compare_versions.py
+  - container-path-to-compare-versions-python-script: /usr/src/app/out/${path-to-compare-versions-python-script}
+
+env:
+  - PWD
+  - VERSION_FOR_COMPARISON
+  - BASELINE_VERSION_IN_REPO
+
+rules:
+
+  build-compare-versions:
+    - task: build-compare-versions-image
+      cmd: docker build -t compare-versions -f ${env.PWD}/cicd_files/external/dockerfiles/CompareVersions.Dockerfile .
+
+  run-compare-versions:
+    - task: run-compare-versions-python-script
+      cmd:
+        - docker run -v "${env.PWD}:/usr/src/app/out" --user "$(id -u):$(id -g)" --rm --name compare-versions-for-baseline compare-versions -vc "${env.VERSION_FOR_COMPARISON}" -bv "${env.BASELINE_VERSION_IN_REPO}"
+
+  write-result-to-artifact-properties:
+    - task: write-result-file-to-artifact-properties
+      cmd: bash -c '
+        case "$(cat comparison_result.txt)" in
+          "1")
+            echo "RESULT_OF_COMPARISON=higher" > "artifact.properties";
+            ;;
+          "-1")
+            echo "RESULT_OF_COMPARISON=lower" > "artifact.properties";
+            ;;
+          "0")
+            echo "RESULT_OF_COMPARISON=equal" > "artifact.properties";
+            ;;
+          *)
+            exit 1
+            ;;
+        esac'

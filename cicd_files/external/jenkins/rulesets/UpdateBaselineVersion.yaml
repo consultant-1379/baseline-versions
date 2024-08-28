@@ -1,0 +1,45 @@
+modelVersion: 2.0
+
+description: "Baseline Versions: Update Baseline Version"
+
+docker-images:
+  - python: armdocker.rnd.ericsson.se/dockerhub-ericsson-remote/python:3.9.4-slim-buster
+
+properties:
+  - path-to-update-baseline-versions-python-script: cicd_files/external/jenkins/scripts/update_baseline_versions_file.py
+  - container-path-to-update-baseline-versions-python-script: /usr/src/app/out/${path-to-update-baseline-versions-python-script}
+  - gerrit-url-of-baseline-repo: ssh://gerrit-gamma.gic.ericsson.se:29418/OSS/com.ericsson.oss.cicd/baseline-versions
+
+env:
+  - PWD
+  - VERSIONS_FILENAME
+  - KEY_TO_UPDATE_BASELINE_VERSION_OF
+  - NEW_BASELINE_VERSION
+
+rules:
+  hard-reset:
+    - task: hard-reset
+      cmd: git reset --hard HEAD~1
+
+  pull-latest-changes:
+    - task: pull-latest-changes
+      cmd: git pull --ff-only origin master
+
+  update-versions-file-with-new-install-baseline:
+    - task: run-update-baseline-versions-python-script
+      docker-image: python
+      docker-mounts:
+        - "${env.PWD}:/usr/src/app/out"
+      cmd: python "${container-path-to-update-baseline-versions-python-script}" -p "/usr/src/app/out/${env.VERSIONS_FILENAME}.json" -k "${env.KEY_TO_UPDATE_BASELINE_VERSION_OF}" -v "${env.NEW_BASELINE_VERSION}"
+
+  push-changes-to-version-file-if-required:
+    - task: push-changes-from-version-file-to-gerrit-if-required
+      cmd: bash -c '
+        if git status --porcelain | grep .; then
+           git add ${env.VERSIONS_FILENAME}.json;
+           git commit -m "Update to baseline version for ${env.KEY_TO_UPDATE_BASELINE_VERSION_OF} to ${env.NEW_BASELINE_VERSION}";
+           git rebase HEAD origin/master;
+           git push ${gerrit-url-of-baseline-repo} HEAD:master;
+        else
+           echo "The baseline version in repo has not changed so not updating version file in gerrit";
+        fi'
